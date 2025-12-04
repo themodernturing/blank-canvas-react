@@ -4,13 +4,15 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Layout } from "@/components/Layout";
-import { PersonalizationProvider, usePersonalization } from "@/contexts/PersonalizationContext";
+import { PersonalizationProvider } from "@/contexts/PersonalizationContext";
 import { VoiceProvider } from "@/contexts/VoiceContext";
 import { PersonaProvider } from "@/contexts/PersonaContext";
-import { Onboarding } from "@/components/Onboarding";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Farewell } from "@/components/Farewell";
 import { useState } from "react";
 import Index from "./pages/Index";
+import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Strategy from "./pages/Strategy";
 import RiskComplianceRadar from "./pages/RiskComplianceRadar";
@@ -29,8 +31,6 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 function AppContent() {
-  const { personalization, clearPersonalization } = usePersonalization();
-  const [showOnboarding, setShowOnboarding] = useState(!personalization);
   const [showFarewell, setShowFarewell] = useState(false);
 
   const handleExit = () => {
@@ -38,14 +38,9 @@ function AppContent() {
   };
 
   const handleRestart = () => {
-    clearPersonalization();
     setShowFarewell(false);
-    setShowOnboarding(true);
+    window.location.href = "/";
   };
-
-  if (showOnboarding) {
-    return <Onboarding onComplete={() => setShowOnboarding(false)} />;
-  }
 
   if (showFarewell) {
     return <Farewell onRestart={handleRestart} />;
@@ -53,44 +48,58 @@ function AppContent() {
 
   return (
     <BrowserRouter>
-      <Layout onExit={handleExit}>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/strategy" element={<Strategy />} />
-          <Route path="/risk-compliance" element={<RiskComplianceRadar />} />
-          <Route path="/negotiation-copilot" element={<Reports />} />
-          <Route path="/predictive-analytics" element={<PredictiveAnalytics />} />
-          <Route path="/early-warning" element={<EarlyWarning />} />
-            <Route path="/financial-command" element={<FinancialCommand />} />
-            <Route path="/cfo-copilot" element={<CFOCopilot />} />
-            <Route path="/time-leverage" element={<TimeLeverage />} />
-          <Route path="/negotiation" element={<Reports />} />
-          <Route path="/meeting-companion" element={<MeetingCompanion />} />
-          <Route path="/communications" element={<CommunicationsDirector />} />
-          <Route path="/exports" element={<ReportsExports />} />
-          <Route path="/arabic-intelligence" element={<ArabicIntelligence />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </Layout>
+      <Routes>
+        {/* Public auth route */}
+        <Route path="/auth" element={<Auth />} />
+        
+        {/* Protected routes */}
+        <Route
+          path="/*"
+          element={
+            <ProtectedRoute>
+              <Layout onExit={handleExit}>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/strategy" element={<Strategy />} />
+                  <Route path="/risk-compliance" element={<RiskComplianceRadar />} />
+                  <Route path="/negotiation-copilot" element={<Reports />} />
+                  <Route path="/predictive-analytics" element={<PredictiveAnalytics />} />
+                  <Route path="/early-warning" element={<EarlyWarning />} />
+                  <Route path="/financial-command" element={<FinancialCommand />} />
+                  <Route path="/cfo-copilot" element={<CFOCopilot />} />
+                  <Route path="/time-leverage" element={<TimeLeverage />} />
+                  <Route path="/negotiation" element={<Reports />} />
+                  <Route path="/meeting-companion" element={<MeetingCompanion />} />
+                  <Route path="/communications" element={<CommunicationsDirector />} />
+                  <Route path="/exports" element={<ReportsExports />} />
+                  <Route path="/arabic-intelligence" element={<ArabicIntelligence />} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
     </BrowserRouter>
   );
 }
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <PersonalizationProvider>
-      <VoiceProvider>
-        <PersonaProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <AppContent />
-          </TooltipProvider>
-        </PersonaProvider>
-      </VoiceProvider>
-    </PersonalizationProvider>
+    <AuthProvider>
+      <PersonalizationProvider>
+        <VoiceProvider>
+          <PersonaProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <AppContent />
+            </TooltipProvider>
+          </PersonaProvider>
+        </VoiceProvider>
+      </PersonalizationProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 

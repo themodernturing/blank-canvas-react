@@ -1,9 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { usePersonalization } from "@/contexts/PersonalizationContext";
 import { useVoice } from "@/hooks/useVoice";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { Volume2, VolumeX } from "lucide-react";
 
 interface OnboardingProps {
@@ -20,8 +23,18 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [initializationStep, setInitializationStep] = useState(0);
   const [showText, setShowText] = useState(false);
   const [isDebouncing, setIsDebouncing] = useState(false);
+  const [isEntering, setIsEntering] = useState(false);
   const { setPersonalization } = usePersonalization();
-  const { speak, isMuted, toggleMute, isSpeaking } = useVoice();
+  const { speak, stop, isMuted, toggleMute, isSpeaking } = useVoice();
+  const { user } = useAuth();
+  
+  const speakRef = useRef(speak);
+  const stopRef = useRef(stop);
+
+  useEffect(() => {
+    speakRef.current = speak;
+    stopRef.current = stop;
+  }, [speak, stop]);
 
   const initializationMessages = [
     "Initializing executive intelligence environment...",
@@ -33,11 +46,11 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   // Voice welcome on mount
   useEffect(() => {
     if (step === 1) {
-      speak("Welcome to ORBITAL — your digital AI companion.");
+      speakRef.current("Welcome to ORBITAL — your digital AI companion.");
     } else if (step === 2 && !isInitializing) {
-      speak("To begin, please enter your name and company to initialize your AI environment.");
+      speakRef.current("To begin, please enter your name and company to initialize your AI environment.");
     }
-  }, [step, isInitializing, speak]);
+  }, [step, isInitializing]);
 
   const handleStart = () => {
     setStep(2);
@@ -52,13 +65,13 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     setShowText(false);
 
     // t=0.0s: First voice line + text fade
-    speak("Initializing executive intelligence environment…");
+    speakRef.current("Initializing executive intelligence environment…");
     setTimeout(() => setShowText(true), 500);
 
     // t=4.5s: Second voice line
     setTimeout(() => {
       setShowText(false);
-      speak("Analyzing company systems…");
+      speakRef.current("Analyzing company systems…");
     }, 4500);
     setTimeout(() => {
       setInitializationStep(1);
@@ -68,7 +81,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     // t=9.0s: Third voice line
     setTimeout(() => {
       setShowText(false);
-      speak("Preparing foresight modules…");
+      speakRef.current("Preparing foresight modules…");
     }, 9000);
     setTimeout(() => {
       setInitializationStep(2);
@@ -78,7 +91,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     // t=13.5s: Fourth voice line
     setTimeout(() => {
       setShowText(false);
-      speak("Finalizing your personalized setup…");
+      speakRef.current("Finalizing your personalized setup…");
     }, 13500);
     setTimeout(() => {
       setInitializationStep(3);
@@ -88,19 +101,61 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     // t=19.0s: Transition to completion screen
     setTimeout(() => {
       setShowText(false);
-      speak("Initialization complete. Your AI companion is ready.");
+      speakRef.current("Initialization complete. Your AI companion is ready.");
       setStep(3);
       setIsInitializing(false);
       setIsDebouncing(false);
     }, TOTAL_ONBOARDING_DURATION_MS);
   };
 
-  const handleEnter = () => {
-    speak(`Good morning, CEO ${name}. ORBITAL systems are now active for ${company}.`);
+  const handleEnter = async () => {
+    if (isEntering) return;
+    setIsEntering(true);
+
+    // Stop any current voice
+    stopRef.current();
+
+    // Save to database if user is authenticated
+    if (user) {
+      try {
+        const { error } = await supabase.from("profiles").upsert(
+          {
+            user_id: user.id,
+            full_name: name.trim(),
+            company_name: company.trim(),
+            onboarding_completed: true,
+            email: user.email,
+          },
+          { onConflict: "user_id" }
+        );
+
+        if (error) {
+          console.error("Error saving profile:", error);
+          toast.error("Failed to save profile. Please try again.");
+          setIsEntering(false);
+          return;
+        }
+      } catch (err) {
+        console.error("Error saving profile:", err);
+        toast.error("Failed to save profile. Please try again.");
+        setIsEntering(false);
+        return;
+      }
+    }
+
+    // Set greeting flag before speaking
+    sessionStorage.setItem("orbital_greeted_this_session", "true");
+
+    // Delay slightly before voice
+    setTimeout(() => {
+      speakRef.current(`Good morning, CEO ${name}. ORBITAL systems are now active for ${company}.`);
+    }, 300);
+
+    // Save to local personalization and complete
     setTimeout(() => {
       setPersonalization({ name: name.trim(), company: company.trim() });
       onComplete();
-    }, 1000);
+    }, 4500);
   };
 
   return (
@@ -112,7 +167,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         aria-label={isMuted ? "Unmute" : "Mute"}
       >
         {isMuted ? (
-          <VolumeX className="h-5 w-5 text-white" />
+          <VolumeX className="h-5 w-5 text-foreground" />
         ) : (
           <Volume2 className="h-5 w-5 text-accent" />
         )}
@@ -244,10 +299,11 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
           <Button 
             onClick={handleEnter}
+            disabled={isEntering}
             size="lg"
             className="bg-accent text-accent-foreground hover:bg-accent/90 min-w-[200px] shadow-glow"
           >
-            Enter ORBITAL →
+            {isEntering ? "Entering..." : "Enter ORBITAL →"}
           </Button>
         </div>
       )}
